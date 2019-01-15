@@ -5,19 +5,6 @@ package com.freak.imageselector.util;
  */
 
 public class Constant {
-    /**
-     * 拍照
-     */
-    public static final int GETPICTURE_TAKEPHOTO = 10001;
-    /**
-     * 选择手机内的图片
-     */
-    public static final int GETPICTURE_SELECTPHOTO = 10002;
-    /**
-     * 裁剪图片
-     */
-    public static final int CUT_PHOTO = 10003;
-
 
     public static final String CLOSE_TRAGETACT_KEY = "CLOSE_TRAGETACT_KEY";
 

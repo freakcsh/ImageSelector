@@ -36,6 +36,8 @@ public class PopupGetPictureView {
 
 		void selectPhoto(View v);
 
+		void cancel(PopupWindow popupWindow);
+
 	}
 
 	public PopupGetPictureView(Context context, GetPicture getPicture) {
@@ -55,7 +57,7 @@ public class PopupGetPictureView {
 	 * */
 	private void initPopWindow() {
 
-		View popView = LayoutInflater.from(context).inflate(
+		final View popView = LayoutInflater.from(context).inflate(
 				R.layout.popup_getpicture, null);
 		popupWindow = new PopupWindow(popView, width, LayoutParams.WRAP_CONTENT);
 
@@ -85,9 +87,10 @@ public class PopupGetPictureView {
 
 					@Override
 					public void onClick(View v) {
-						if (popupWindow.isShowing()) {
-							popupWindow.dismiss();
-						}
+//						if (popupWindow.isShowing()) {
+//							popupWindow.dismiss();
+//						}
+						getPicture.cancel(popupWindow);
 					}
 				});
 

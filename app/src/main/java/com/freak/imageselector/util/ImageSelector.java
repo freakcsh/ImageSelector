@@ -3,10 +3,16 @@ package com.freak.imageselector.util;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.database.Cursor;
 import android.net.Uri;
+import android.os.Build;
+import android.provider.MediaStore;
+import android.support.v4.content.FileProvider;
+import android.text.TextUtils;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.View;
+import android.widget.Toast;
 
 import com.freak.imageselector.util.popup.PopupGetPictureView;
 
@@ -21,8 +27,21 @@ import java.util.List;
  */
 
 public class ImageSelector {
+
+    /**
+     * 拍照
+     */
+    public static final int GET_PICTURE_TAKE_PHOTO = 10001;
+    /**
+     * 选择手机内的图片
+     */
+    public static final int GET_PICTURE_SELECT_PHOTO = 10002;
+    /**
+     * 裁剪图片
+     */
+    public static final int CUT_PHOTO = 10003;
     private static ImageSelector mInstance;
-    private File userImgFile;
+
     /**
      * 缓存拍照图片路径
      */
@@ -76,92 +95,147 @@ public class ImageSelector {
         DisplayUtil.screenWidthDip = DisplayUtil.px2dip(context, dm.widthPixels);
         DisplayUtil.screenHeightDip = DisplayUtil.px2dip(context, dm.heightPixels);
     }
-    /**
-     * 显示图片选择器
-     * @param context
-     * @param view
-     */
-    public void showSelector(final Context context, View view){
-        PopupGetPictureView popupGetPictureView = new PopupGetPictureView(context, new
-                PopupGetPictureView.GetPicture() {
-                    @Override
-                    public void takePhoto(View v) {
-                        if (PermissionUtils.checkTakePhotoPermission(context)) {
-                            userImgFile = GetPictureUtils.takePicture(context, Constant.GETPICTURE_TAKEPHOTO);
-                        }
-                    }
 
-                    @Override
-                    public void selectPhoto(View v) {
-                        if (PermissionUtils.checkAlbumStroagePermission(context)) {
-                            GetPictureUtils.selectPhoto(context, Constant.GETPICTURE_SELECTPHOTO);
-                        }
-                    }
-                });
-        popupGetPictureView.showPop(view);
+
+
+
+
+
+
+    /**
+     * 发起拍照
+     */
+    public static File takePicture(Context mContext, int requestCode) {
+        String imgUrl = "";
+        File f = null;
+        try {
+            File dir = ImageSelector.getInstance().getTakePhotoCacheDir();
+            String key = String.valueOf(System.currentTimeMillis());
+            if (!dir.exists()) {
+                dir.mkdir();
+            }
+            f = new File(dir, key + ".jpg");
+            imgUrl = f.getAbsolutePath();
+            Uri u = toURI(mContext, f);
+            Intent intent = new Intent(
+                    MediaStore.ACTION_IMAGE_CAPTURE);
+            intent.putExtra(MediaStore.Images.Media.ORIENTATION, 0);
+            intent.putExtra(MediaStore.EXTRA_OUTPUT, u);
+            intent.putExtra("imgurl", imgUrl);
+            ((Activity) mContext).startActivityForResult(intent, requestCode);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return f;
     }
 
     /**
-     * 选择图片回调
-     * @param context
-     * @param requestCode
-     * @param resultCode
+     * 相册选择图片
+     *
+     * @return
+     */
+    public static void photoPick(Context mContext, int requestCode) {
+        try {
+            Intent getAlbum = new Intent(Intent.ACTION_PICK);
+            getAlbum.setType("image/*");
+            ((Activity) mContext).startActivityForResult(getAlbum, requestCode);
+        } catch (Exception e) {
+
+        }
+    }
+
+    /***
+     * 从intent获取图片
      * @param data
+     * @param mContext
+     * @return
      */
-    public void onSelectorResult(Context context, int requestCode, int resultCode, Intent data){
-        if (resultCode == 0) {
-            return ;
+    public static File getPhotoFromIntent(Intent data, Context mContext) {
+        if (data == null) {
+            return null;
         }
-        switch (requestCode) {
-            //拍照
-            case Constant.GETPICTURE_TAKEPHOTO:
-                userImgFile = GetPictureUtils.cutPicture(context, userImgFile);
-                break;
-            //选择照片
-            case Constant.GETPICTURE_SELECTPHOTO:
-                userImgFile = GetPictureUtils.getPhotoFromIntent(data, context);
-                userImgFile = GetPictureUtils.cutPicture(context, userImgFile);
-                break;
-            //裁剪照片
-            case Constant.CUT_PHOTO:
-                if (resultCode == Activity.RESULT_OK) {
-                 compressImage(userImgFile);
+        try {
+            File file = null;
+            String path = "";
+            if (data.getDataString().contains("content")) {
+                Uri originalUri = data.getData();
+                Cursor cursor = mContext.getContentResolver().query(originalUri,
+                        null, null, null, null);
+                // Source is Dropbox or other similar
+                if (cursor == null) {
+                    // local file path
+                    path = originalUri.getPath();
+                } else {
+                    cursor.moveToFirst();
+                    int idx = cursor
+                            .getColumnIndex(MediaStore.Images.ImageColumns.DATA);
+                    path = cursor.getString(idx);
+                    cursor.close();
                 }
-                break;
-            default:
-                break;
+            } else {
+                path = data.getDataString().replace("file://", "");
+            }
+            if (!TextUtils.isEmpty(path)) {
+                file = new File(path);
+                return file;
+            } else {
+                return null;
+            }
+        } catch (Exception e) {
+            Toast.makeText(mContext, "获取图片失败", Toast.LENGTH_SHORT).show();
+            return null;
         }
     }
 
     /**
-     * 压缩图片
-     * @param file
+     * 发起裁剪
      */
-    public void compressImage(File file) {
-        List<File> list = new ArrayList<>();
-        list.add(file);
-        BitmapUtil.compressFiles(list, new ICompressImageResponse() {
-            @Override
-            public void onSuccess(List<File> images) {
-                File imgFile = images.get(0);
-                setUri(Uri.fromFile(imgFile));
-                Log.e("TAG","compressImage"+mUri);
+    public static File cutPicture(Context mContext, File selectPhoto) {
+        try {
+            if (selectPhoto == null) {
+                return null;
             }
 
-            @Override
-            public void onMarch() {
-
+            File dir = ImageSelector.getInstance().getTakePhotoCacheDir();
+            String key = String.valueOf(System.currentTimeMillis());
+            if (!dir.exists()) {
+                dir.mkdir();
             }
-
-            @Override
-            public void onFail() {
-
-            }
-
-            @Override
-            public void onFinish() {
-
-            }
-        });
+            File outfile = new File(dir, key + ".jpg");
+            Uri uri = toURI(mContext, selectPhoto);
+            Uri outUri = Uri.fromFile(outfile);
+            Intent cropIntent = new Intent("com.android.camera.action.CROP");
+            //添加这一句表示对目标应用临时授权该Uri所代表的文件
+            cropIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            // 图片来源
+            cropIntent.setDataAndType(uri, "image/*");
+            // 设置剪裁剪属性
+            cropIntent.putExtra("crop", "true");
+            //    cropIntent.putExtra("aspectX", 1);
+            //   cropIntent.putExtra("aspectY", 3);
+            // 输出的坐标
+            cropIntent.putExtra("outputX", 500);
+            cropIntent.putExtra("outputY", 500);
+            // 返回剪裁的图片数据
+            cropIntent.putExtra(MediaStore.EXTRA_OUTPUT, outUri);
+            cropIntent.putExtra("return-data", false);
+            ((Activity) mContext).startActivityForResult(cropIntent,
+                    CUT_PHOTO);
+            return outfile;
+        } catch (Exception e) {
+            return selectPhoto;
+        }
     }
+
+    public static Uri toURI(Context mContext, File file) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
+            return Uri.fromFile(file);
+        } else {
+            return FileProvider.getUriForFile(
+                    mContext,
+                    "com.freak.imageselector.fileProvider",
+                    file);
+        }
+    }
+
 }
